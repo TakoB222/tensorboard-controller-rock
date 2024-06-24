@@ -1,0 +1,55 @@
+name: tensorboard-controller
+summary: TensorBoard Controller
+description: |
+  TensorBoard Controller is a component for managing TensorBoard instances
+  within a Kubernetes cluster.
+version: "1.9.0"
+license: Apache-2.0
+base: ubuntu@22.04
+services:
+  tensorboard-controller:
+    override: replace
+    summary: "tensorboard-controller service"
+    startup: enabled
+    user: ubuntu
+    command: "/manager"
+platforms:
+  amd64:
+
+parts:
+  tensorboard-controller:
+    plugin: go
+    source: https://github.com/kubeflow/kubeflow
+    source-type: git
+    source-tag: v1.9.0-rc.0
+    build-snaps:
+      - go/1.17/stable
+    build-packages:
+      - apt
+      - bash
+    build-environment:
+      - CGO_ENABLED: 0
+      - GOOS: linux
+    stage-packages:
+      - bash
+    override-build: |
+      set -xe
+      cd $CRAFT_PART_SRC/components/tensorboard-controller/
+
+      # build
+      rm -f go.sum
+      go mod tidy
+      go mod download all
+      go build -a -mod=mod -o manager main.go
+
+      # install build artifacts
+      mkdir -p $CRAFT_PART_INSTALL/
+      cp manager $CRAFT_PART_INSTALL/
+
+  non-root-user:
+    plugin: nil
+    after: [tensorboard-controller]
+    overlay-script: |
+      # Create a user in the $CRAFT_OVERLAY chroot
+      groupadd -R $CRAFT_OVERLAY -g 1001 ubuntu
+      useradd -R $CRAFT_OVERLAY -M -r -u 1001 -g ubuntu ubuntu
